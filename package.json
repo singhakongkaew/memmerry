@@ -1,0 +1,8 @@
+{
+  "name": "singha-vercel-app",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  }
+}
