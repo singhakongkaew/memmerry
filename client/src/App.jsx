@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './App.css'
 import { useAuth } from './context/AuthContext'
@@ -40,6 +40,62 @@ function compressImage(dataUrl) {
     image.onerror = () => resolve(dataUrl)
     image.src = dataUrl
   })
+}
+
+function FloatingMemoryBubbles({ memories }) {
+  const layerRef = useRef(null)
+  const photos = memories.filter((memory) => typeof memory.image === 'string' && memory.image).slice(0, 7)
+  const photoKey = photos.map((memory) => `${memory.id}:${memory.image.length}`).join('|')
+
+  useEffect(() => {
+    const layer = layerRef.current
+    if (!layer) return undefined
+    const elements = [...layer.querySelectorAll('.memory-bubble')]
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      elements.forEach((element, index) => {
+        const size = 82 + (index % 4) * 15
+        element.style.width = `${size}px`
+        element.style.height = `${size}px`
+        element.style.left = `${8 + (index * 17) % 78}vw`
+        element.style.top = `${12 + (index * 19) % 70}vh`
+      })
+      return undefined
+    }
+    const bodies = elements.map((element, index) => {
+      const size = 82 + (index % 4) * 15
+      const maxX = Math.max(0, window.innerWidth - size)
+      const maxY = Math.max(0, window.innerHeight - size)
+      const angle = Math.random() * Math.PI * 2
+      const speed = .18 + Math.random() * .24
+      return { element, size, x: Math.random() * maxX, y: Math.random() * maxY, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed }
+    })
+
+    let animationFrame
+    let previousTime = performance.now()
+    const move = (time) => {
+      const step = Math.min((time - previousTime) / 16.67, 2)
+      previousTime = time
+      for (const body of bodies) {
+        const maxX = Math.max(0, window.innerWidth - body.size)
+        const maxY = Math.max(0, window.innerHeight - body.size)
+        body.x += body.vx * step
+        body.y += body.vy * step
+        if (body.x <= 0 || body.x >= maxX) { body.x = Math.max(0, Math.min(body.x, maxX)); body.vx *= -1 }
+        if (body.y <= 0 || body.y >= maxY) { body.y = Math.max(0, Math.min(body.y, maxY)); body.vy *= -1 }
+        body.element.style.width = `${body.size}px`
+        body.element.style.height = `${body.size}px`
+        body.element.style.transform = `translate3d(${body.x}px, ${body.y}px, 0)`
+      }
+      animationFrame = requestAnimationFrame(move)
+    }
+    animationFrame = requestAnimationFrame(move)
+    return () => cancelAnimationFrame(animationFrame)
+  }, [photoKey])
+
+  if (!photos.length) return null
+  return <div className="floating-memory-layer" ref={layerRef} aria-hidden="true">
+    {photos.map((memory) => <div className="memory-bubble" key={memory.id}><img src={memory.image} alt="" /></div>)}
+  </div>
 }
 
 function App() {
@@ -184,6 +240,7 @@ function App() {
   }
 
   return <main className="app-shell">
+    {activeView === 'home' && <FloatingMemoryBubbles memories={memories} />}
     <header className="topbar"><button className="logo" onClick={() => setActiveView('home')}><span>♥</span> ours.</button><nav>{[['home', 'home'], ['memories', 'memories'], ['planner', 'planner']].map(([id, label]) => <button key={id} className={activeView === id ? 'active' : ''} onClick={() => setActiveView(id)}>{t(label)}</button>)}{user?.role === 'admin' && <a className="admin-link" href="/admin">Admin</a>}</nav><button className="avatar" aria-label="Open profile menu" title="Open profile menu" onClick={() => setProfileMenuOpen(true)}>{user?.profileImage ? <img src={user.profileImage} alt="" /> : `${(user?.displayName || 'Y')[0].toUpperCase()}${(user?.email || 'M')[0].toUpperCase()}`}</button></header>
     <section className="content page-enter" key={activeView}>
       {!apiReady ? <HomeSkeleton /> : <>

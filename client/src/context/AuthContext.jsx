@@ -15,8 +15,14 @@ async function requestAuth(path, email, password, inviteCode) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password, ...(inviteCode ? { inviteCode } : {}) }),
   })
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(data.message || 'Unable to complete authentication.')
+  const responseText = await response.text()
+  let data = {}
+  try { data = responseText ? JSON.parse(responseText) : {} } catch { /* Non-JSON response, such as an HTML 404 page. */ }
+  if (!response.ok) {
+    const message = data.message || `Authentication API returned HTTP ${response.status}. Check the API route and server logs.`
+    throw new Error(message)
+  }
+  if (!data.token || !data.user) throw new Error(`Authentication API returned an unexpected response (HTTP ${response.status}). Check the API route.`)
   return data
 }
 
